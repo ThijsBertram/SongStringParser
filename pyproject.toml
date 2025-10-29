@@ -1,0 +1,117 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "songstring-parser"
+version = "0.1.0"
+description = "A deterministic, multi-pass parser for messy song strings (artist/title/remix/live/etc.)"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+  { name = "Thijs Bertram" }
+]
+keywords = [
+  "audio",
+  "music",
+  "metadata",
+  "string-parsing",
+  "regex",
+  "parser"
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: Multimedia :: Sound/Audio"
+]
+
+# Core runtime deps — keep minimal until we actually need a lib (e.g., rapidfuzz).
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/ThijsBertram/SongStringParser"
+
+[project.optional-dependencies]
+# Install with: pip install -e .[dev]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=4.1",
+  "ruff>=0.6",
+  "black>=24.0",
+  "mypy>=1.10"
+]
+
+# If you decide to add fuzzy matching later, this keeps it optional:
+fuzzy = [
+  "rapidfuzz>=3.0"
+]
+
+# A lean test extra if you want to keep dev smaller:
+test = [
+  "pytest>=8.0",
+  "pytest-cov>=4.1"
+]
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["songstring_parser]
+
+[tool.setuptools.package-data]
+"songstring_parser" = ["py.typed"]
+
+[tool.mypy]
+python_version = "3.10"
+packages = ["songstring_parser"]
+pretty = true
+show_error_codes = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+strict_optional = true
+# dial up gradually:
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-q --strict-markers --strict-config --disable-warnings"
+testpaths = ["tests"]
+filterwarnings = [
+  "ignore::DeprecationWarning"
+]
+
+# ================
+# PRE COMMIT STUFF
+# ================
+
+[tool.coverage.run]
+branch = true
+source = ["songstring_parser"]
+omit = [
+  "tests/*",
+  "venv/*",
+  ".venv/*"
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 90
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+skip-string-normalization = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+select = ["E", "F", "I", "B", "W"]
+ignore = []
+exclude = ["venv", ".venv", "build", "dist"]
+fix = true
