@@ -1,0 +1,111 @@
+# -----------------------------
+# Python bytecode & caches
+# -----------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# -----------------------------
+# Build / packaging artifacts
+# -----------------------------
+.build/
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+
+# -----------------------------
+# Virtual environments & tooling
+# -----------------------------
+.venv/
+venv/
+ENV/
+env/
+.python-version  # pyenv
+
+# -----------------------------
+# Test & coverage artifacts
+# -----------------------------
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# -----------------------------
+# Linters / formatters / type checkers
+# -----------------------------
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.pyre/
+
+# -----------------------------
+# Editor / IDE settings
+# -----------------------------
+.vscode/
+.idea/
+*.code-workspace
+
+# -----------------------------
+# OS junk
+# -----------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+Desktop.ini
+Icon?
+
+# -----------------------------
+# Environment / secrets
+# -----------------------------
+.env
+.env.*
+*.local
+*.secret
+*.secrets
+*.envrc
+
+# -----------------------------
+# Logs / temp
+# -----------------------------
+*.log
+*.tmp
+*.temp
+tmp/
+cache/
+*.swp
+*.swo
+
+# -----------------------------
+# Lockfiles (uncomment if you DON'T want to commit them)
+# For libraries, lockfiles are usually omitted; for apps, you may commit them.
+# -----------------------------
+# poetry.lock
+# uv.lock
+# Pipfile.lock
+
+# -----------------------------
+# Project-specific
+# -----------------------------
+# Keep test datasets but ignore accidental binaries except JSON/CSV/YAML
+tests/data/**/*.bin
+tests/data/**/*.zip
+tests/data/**/*.tar
+tests/data/**/*.7z
+tests/data/**/*.mp3
+tests/data/**/*.flac
+tests/data/**/*.wav
+tests/data/**/*.m4a
+
+# Allow structured test fixtures
+!tests/data/**/*.json
+!tests/data/**/*.csv
+!tests/data/**/*.yaml
+!tests/data/**/*.yml
+
+# If you add package-embedded type marker (PEP 561), DO NOT ignore it:
+# src/songstring_parser/py.typed

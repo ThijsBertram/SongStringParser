@@ -59,7 +59,7 @@ test = [
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["songstring_parser]
+include = ["songstring_parser"]
 
 [tool.setuptools.package-data]
 "songstring_parser" = ["py.typed"]

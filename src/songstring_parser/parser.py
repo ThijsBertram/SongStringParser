@@ -1,7 +1,7 @@
 from typing import Optional, Dict, Any, List, Tuple
 
-from src.conf import ParserConfig
-from src.models import ParseResult, HarvestedSegment
+from songstring_parser.conf import ParserConfig
+from songstring_parser.models import ParseResult, HarvestedSegment
 
 class SongStringParser:
     """
