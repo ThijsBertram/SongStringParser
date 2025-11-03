@@ -1,7 +1,10 @@
+import re 
+
 from typing import Optional, Dict, Any, List, Tuple
 
 from songstring_parser.conf import ParserConfig
 from songstring_parser.models import ParseResult, HarvestedSegment
+from songstring_parser.steps.step1_strip_path_and_extension import strip_path_and_extension
 
 class SongStringParser:
     """
@@ -39,8 +42,8 @@ class SongStringParser:
         }
 
         # Stage 1: Path & extension peel
-        self._strip_path_and_extension(state)
-
+        self.state['basename'], self.state['extension'] = strip_path_and_extension(state, audio_extensions=self.config.audio_extensions)
+        
         # Stage 2: Unicode & spacing normalization
         self._normalize_unicode_and_spacing(state)
 
@@ -83,12 +86,7 @@ class SongStringParser:
 
     # ---------- Stage methods (placeholders) ----------
 
-    def _strip_path_and_extension(self, state: Dict[str, Any]) -> None:
-        """
-        Keep only the basename; detect and remove audio extension.
-        Set state['basename'], state['extension'], update state['working'].
-        """
-        raise NotImplementedError("_strip_path_and_extension")
+
 
     def _normalize_unicode_and_spacing(self, state: Dict[str, Any]) -> None:
         """

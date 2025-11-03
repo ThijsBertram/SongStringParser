@@ -4,20 +4,32 @@ from dataclasses import dataclass, field
 @dataclass
 class ParserConfig:
     """Configuration knobs and synonym dictionaries."""
+
+    # STEP 1 
     # Known audio file extensions (lowercased with leading dot)
     audio_extensions: Tuple[str, ...] = (".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg", ".aiff", ".alac", ".wma")
+
+    # STEP 2
+    dashes_to_hyphen = {
+        0x2010,  # hyphen
+        0x2011,  # non-breaking hyphen
+        0x2012,  # figure dash
+        0x2013,  # en dash
+        0x2014,  # em dash
+        0x2015,  # horizontal bar
+    }
+
 
     # Synonyms / dictionaries (all matching should be case-insensitive at runtime)
     feat_synonyms: Tuple[str, ...] = ("feat.", "ft.", "featuring", "with")
     remix_words: Tuple[str, ...] = (
-        "remix", "edit", "version", "rework", "refix", "bootleg",
+        "remix", "rmx", "edit", "version", "rework", "refix", "bootleg",
         "vip", "vip mix", "dub", "dub mix", "club mix", "radio edit",
-        "acoustic", "unplugged", "extended mix", "private remix",
-        "sped up", "nightcore"
+        "acoustic", "unplugged", "extended mix", "private remix"
     )
     live_words: Tuple[str, ...] = (
         "live", "live version", "live at", "live in", "live @", "session",
-        "tiny desk", "bbc", "boilerrm", "boiler room"
+        "tiny desk"
     )
 
     # Tokens considered "noise" (to discard from title/artist semantic parsing)
