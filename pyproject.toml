@@ -87,7 +87,11 @@ filterwarnings = [
 markers = [
   "golden: end-to-end parser tests",
   "unit: unit tests for individual parsing steps",
-  "property: property-bases fuzz tests"
+  "property: property-bases fuzz tests",
+  "step1: get extension and remove directory prefix",
+  "step2: normalizing to unicode",
+  "step3: clean album, cd and track prefix",
+  "step4: parse bracket info",
 ]
 
 # ================

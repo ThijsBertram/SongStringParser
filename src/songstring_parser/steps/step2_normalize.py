@@ -3,8 +3,8 @@ import unicodedata
 
 from songstring_parser.conf import ParserConfig
 
-
 DASHES_TO_HYPHEN = ParserConfig().dashes_to_hyphen
+
 
 def normalize_separators_whitespace(s: str, dashes_to_hyphen=DASHES_TO_HYPHEN) -> str:
     """

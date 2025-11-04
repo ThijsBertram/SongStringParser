@@ -19,26 +19,38 @@ class ParserConfig:
         0x2015,  # horizontal bar
     }
 
+    bracket_pairs = [
+    ("(", ")"),
+    ("[", "]"),
+    ("{", "}"),
+    ("<", ">")
+]
+
 
     # Synonyms / dictionaries (all matching should be case-insensitive at runtime)
-    feat_synonyms: Tuple[str, ...] = ("feat.", "ft.", "featuring", "with")
-    remix_words: Tuple[str, ...] = (
+    feat_indicators: Tuple[str, ...] = ("feat.", "ft.", "featuring", "with", "feat", "ft")
+
+    version_indicators: Tuple[str, ...] = (
         "remix", "rmx", "edit", "version", "rework", "refix", "bootleg",
-        "vip", "vip mix", "dub", "dub mix", "club mix", "radio edit",
-        "acoustic", "unplugged", "extended mix", "private remix"
+        "vip", "vip mix", "vip remix", "vip rmx", "vip version", 
+        "dub", "dub mix", "club mix", "radio edit",
+        "acoustic", "unplugged", "extended mix", "fix"
     )
-    live_words: Tuple[str, ...] = (
-        "live", "live version", "live at", "live in", "live @", "session",
-        "tiny desk"
+    live_indicators: Tuple[str, ...] = (
+        "live", "live version", "live at", "live in", "live @", "session"
     )
 
-    # Tokens considered "noise" (to discard from title/artist semantic parsing)
-    noise_tokens: Tuple[str, ...] = (
-        "official video", "visualizer", "lyric video", "hq", "hd", "vbr",
-        "320kbps", "128k", "flac", "web", "promo", "unmastered", "final",
-        "key ", "bpm", "purchase at beatport", "beatport exclusive", "sc-rip",
-        "cat#", "cat-", "labelname", "promo cd"
+
+    noise_indicators: Tuple[str, ...] = (
+        "official video", "visualizer", "vizualizer", "lyric video", "hq", "hd", "vbr",
+        "videoclip", "official visualizer", "remastered", "remaster", "official remaster",
+        "web", "promo", "unmastered", "final", 
+        "purchase at beatport", "beatport exclusive", "sc-rip",
+        "labelname", "promo cd", "label", "vinyl rip", "rip", "cd rip", "radio rip"
+        # NOTE: removed "320kbps", "128k" here; those are now covered by regexes
+        # NOTE: removed raw "key " and "bpm" because they’re too broad; better as regex (below)
     )
+
 
     # Artist connector policy
     split_connectors_spaced: Tuple[str, ...] = (" & ", " and ", " + ", " x ", " × ", " vs. ", ",")

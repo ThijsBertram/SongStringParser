@@ -4,8 +4,8 @@ from songstring_parser.conf import ParserConfig
 from songstring_parser.steps.step2_normalize import normalize_separators_whitespace
 from tests.utils.state_factory import *
 
-pytestmark = pytest.mark.unit
-
+@pytest.mark.step2
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "raw,target",
     [

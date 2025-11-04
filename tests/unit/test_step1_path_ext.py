@@ -5,12 +5,12 @@ from songstring_parser.steps.step1_strip_path_and_extension import strip_path_an
 from tests.utils.state_factory import *
 
 
-pytestmark = pytest.mark.unit
-
 @pytest.fixture
 def parser() -> SongStringParser:
     return SongStringParser(ParserConfig())
 
+@pytest.mark.step1
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "raw,basename,ext",
     [
