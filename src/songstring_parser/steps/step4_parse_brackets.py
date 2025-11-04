@@ -223,9 +223,7 @@ def _classify(text: str, patterns: ClassifierPatterns) -> Harvested:
         feat_names_raw = m.group("names") if m and m.groupdict().get("names") else ""
         feat_names = _tidy_name(feat_names_raw)
         return Harvested(raw="", text=t, kind="", cls="feat", name=feat_names or None)
-        
-        print("DETECTED: feat")
-    
+            
        
     # Live
     if patterns.live_rx.search(t):
