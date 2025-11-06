@@ -5,12 +5,6 @@ from typing import List, Dict, Any, Tuple, Optional, Pattern, Sequence
 from songstring_parser.conf import ParserConfig
 
 
-
-# TO DO:
-# - nested brackets
-# - refactor remix_byline into version_artist (r'by' optional in the pattern)
-# - change logical order of bracket parsing
-
 # GET CONFIG
 pc = ParserConfig()
 BRACKET_PAIRS = pc.bracket_pairs
@@ -19,16 +13,28 @@ VERSION_INDICATORS = pc.version_indicators
 NOISE_INDICATORS = pc.noise_indicators
 LIVE_INDICATORS = pc.live_indicators
 
-
+@dataclass
+class ParseResult:
+    raw: str
+    cleaned: str
+    feat: str
+    feat_artist: str
+    remix_artist: str
+    version: str
+    extension: str
+    bitrate: str
+    harvested: List[Harvested]
+    noise: List[str]
+    
 # Models
 @dataclass
 class Harvested:
     raw: str           
     text: str         
-    kind: str         
-    cls: str          
-    name: Optional[str] = None  
+    type: str  # ["version", "remix", "feat", "live", "noise", "unknown"]        
+    artist: Optional[str] = None  
     version: Optional[str] = None 
+    span: _Span = None
 
 @dataclass
 class ClassifierPatterns:
@@ -41,24 +47,69 @@ class ClassifierPatterns:
     byline_name_type_rx : Pattern
     live_rx: Pattern
     noise_rx: Pattern
+    noise_full_rx: Pattern
     original_mix_rx: Pattern
+
+@dataclass
+class _Span:
+    start: int
+    end: int          # end is exclusive (points to char AFTER the closing bracket)
+    l: str            # opening bracket char
+    r: str            # closing bracket char
+    depth: int        # 1-based nesting depth at the time of match
+
+# ================
+# HELPERS
+# ================
+def _is_effectively_empty(text: str) -> bool:
+    if not text or not text.strip():
+        return True
+    _SEP_ONLY_RX = re.compile(r"^[\s\-\–\—_/|:;,.]+$")
+
+    return bool(_SEP_ONLY_RX.match(text))
+
+def _find_spans_nested(s: str, pairs: List[Tuple[str, str]]) -> List[_Span]:
+    openers = {l: r for (l, r) in pairs}
+    closers = {r: l for (l, r) in pairs}
+    stack: List[Tuple[str, int]] = []
+    spans: List[_Span] = []
+
+    for i, ch in enumerate(s):
+        if ch in openers:
+            stack.append((ch, i))
+        elif ch in closers:
+            if stack and stack[-1][0] == closers[ch]:
+                lch, pos = stack.pop()
+                depth = len(stack) + 1  # depth when this pair closes
+                spans.append(_Span(start=pos, end=i+1, l=lch, r=ch, depth=depth))
+            else:
+                # mismatched closer; ignore
+                continue
+    return spans
 
 # ================
 # CONSTRUCT REGEX
 # ================
+
 def word_alternatives(terms, flexible_space=True) -> str:
     # longest first so "radio edit" beats "edit"
     terms = sorted(terms, key=len, reverse=True)
     alts = []
     for t in terms:
+        # if you truly want to allow regex terms verbatim:
         is_regexy = bool(re.search(r"[\\\[\]\(\)\^\$\.\*\+\?\{\}\|]|\\d|\\s", t))
-        if not is_regexy:
-            t = re.escape(t)
-            t = re.sub(r"\s+", r"\\s+" if flexible_space else r"\\s*", t)
-        alts.append(t)
+        if is_regexy:
+            alts.append(t)
+        else:
+            parts = t.split()  # split on whitespace
+            glue = r"\s+" if flexible_space else r"\s*"
+            alts.append(glue.join(re.escape(p) for p in parts))
     return "(?:" + "|".join(alts) + ")"
 
 
+def _join_escaped_with_whitespace(parts, flexible_space=True) -> str:
+    glue = r"\s+" if flexible_space else r"\s*"
+    return glue.join(re.escape(p) for p in parts if p)
 
 def build_noise_alt(
     literal_terms: Sequence[str],
@@ -66,26 +117,35 @@ def build_noise_alt(
     flexible_space: bool = True,
 ) -> str:
     """
-    Build a single alternation (?: ... ) for noise detection.
-    - Literals are escaped and wrapped with \b...\b
-    - Spaces in literals become \s+ (or \s*) for robustness
-    - Regex terms are inserted as-is (no escaping, no global \b wrapping)
+    Search-mode alternation:
+      - literals: \b<escaped words joined by \s+>\b
+      - regex terms: inserted as-is (they manage their own boundaries)
     """
     alts = []
-
-    # literals: escape + flexible spaces + \b term \b
     for t in literal_terms:
-        esc = re.escape(t)
-        if flexible_space:
-            esc = re.sub(r"\s+", r"\\s+", esc)
-        # wrap literals with word boundaries
-        alts.append(rf"\b{esc}\b")
-
-    # regex terms: included as-is
-    alts.extend(regex_terms)
-
+        lit = _join_escaped_with_whitespace(t.split(), flexible_space)
+        alts.append(rf"\b{lit}\b")
+    alts.extend(regex_terms)  # prebuilt regex fragments
     return "(?:" + "|".join(alts) + ")"
 
+def build_noise_fullmatch_alt(
+    literal_terms: Sequence[str],
+    regex_terms: Sequence[str],
+    flexible_space: bool = True,
+    allow_quotes: bool = False,
+) -> str:
+    """
+    Fullmatch-mode alternation (use with ^(?:... )$):
+      - literals: ^ (optional quotes) <escaped words joined by \s+> (optional quotes) $
+      - regex terms: inserted as-is, optionally wrapped with quotes
+    """
+    alts = []
+    q = r"""["'“”‘’]?\s*""" if allow_quotes else ""
+    for t in literal_terms:
+        lit = _join_escaped_with_whitespace(t.split(), flexible_space)
+        alts.append(rf"{q}(?:{lit}){q}")
+    alts.extend([rf"{q}(?:{rx}){q}" for rx in regex_terms])
+    return "(?:" + "|".join(alts) + ")"
 
 def compile_classifiers() -> ClassifierPatterns:
     # FEAT
@@ -121,21 +181,17 @@ def compile_classifiers() -> ClassifierPatterns:
         r"\b" + VBR_RX + r"\b",           # V0, V2, etc.
         r"\b" + CBR_VBR_WORDS_RX + r"\b", # CBR or VBR words
     ]
-    noise_alt = build_noise_alt(NOISE_INDICATORS, NOISE_REGEXES)
-    noise_rx = re.compile(noise_alt, re.IGNORECASE)
 
+    # compile both
+    noise_alt_search = build_noise_alt(NOISE_INDICATORS, NOISE_REGEXES)               # your existing builder
+    noise_alt_full   = build_noise_fullmatch_alt(NOISE_INDICATORS, NOISE_REGEXES)     # NEW
 
-    # VERSION
-    # TODO: 
-    # - only version, no artist
-    # - version_artist + version_by_artist (by optional in regex pattern)
-    # - artist_version
-    # - artist_version_possessive
-
-
+    noise_rx        = re.compile(noise_alt_search, re.IGNORECASE)                   # .search
+    noise_full_rx   = re.compile(rf"^(?:{noise_alt_full})$", re.IGNORECASE)         # .fullmatch equivalent
 
     version_alt = word_alternatives(VERSION_INDICATORS)
     version_only_inner_rx = re.compile(rf"^(?P<type>{version_alt})$", re.IGNORECASE)
+
     # version_anywhere_inner_rx = re.compile(rf"\b(?P<type>{version_alt})\b", re.IGNORECASE)  # optional fallback
 
 
@@ -178,38 +234,17 @@ def compile_classifiers() -> ClassifierPatterns:
         byline_name_type_rx =byline_name_type_rx ,
         live_rx=live_rx,
         noise_rx=noise_rx,
+        noise_full_rx=noise_full_rx,
         original_mix_rx=original_mix_rx,
     )
+
 # ================
 # HELPER FUNCS
 # ================
-def _find_first_balanced(s: str) -> Optional[Tuple[int, int, str, str]]:
-    """
-    Find leftmost, shortest balanced bracket pair among (), [], {}.
-    Returns (start, end, left_char, right_char) for the first found, else None.
-    """
-    best = None
-    for l, r in BRACKET_PAIRS:
-        i = s.find(l)
-        if i == -1:
-            continue
-        # naive balanced search forward
-        depth = 0
-        for j in range(i, len(s)):
-            if s[j] == l:
-                depth += 1
-            elif s[j] == r:
-                depth -= 1
-                if depth == 0:
-                    cand = (i, j + 1, l, r)
-                    if best is None or i < best[0] or (i == best[0] and (j + 1 - i) < (best[1] - best[0])):
-                        best = cand
-                    break
-    return best
-
-
 def _classify(text: str, patterns: ClassifierPatterns) -> Harvested:
     t = text.strip()
+    print(f"TEXT TO MATCH: {t}")
+
 
     def _tidy_name(s: str) -> str:
         return s.strip(" -:()[]{}\"'\t")
@@ -217,31 +252,31 @@ def _classify(text: str, patterns: ClassifierPatterns) -> Harvested:
     # Feat (strong, early)
     if (patterns.feat_leading.search(t)
             or patterns.feat_trailing.search(t)):
-        
+
+        print("DETECTED: FEAT")
+
         m = (patterns.feat_leading.search(t)
             or patterns.feat_trailing.search(t))
         feat_names_raw = m.group("names") if m and m.groupdict().get("names") else ""
         feat_names = _tidy_name(feat_names_raw)
-        return Harvested(raw="", text=t, kind="", cls="feat", name=feat_names or None)
+        return Harvested(raw="", text=t, type="feat", artist=feat_names or None)
             
        
     # Live
     if patterns.live_rx.search(t):
-        print("DETECTED: live")
-
-        return Harvested(raw="", text=t, kind="", cls="live")
+        print("DETECTED: LIVE ")
+        return Harvested(raw="", text=t, type="live")
 
     # ORIGINAL
     if patterns.original_mix_rx.search(t):
-        print("DETECTED: og")
-
-        return Harvested(raw="", text=t, kind="", cls="remix_version", version="Original Mix")
+        return Harvested(raw="", text=t, type="version", version="Original Mix")
     
   # 4) STRICT version-only — entire inner text is a version token (e.g., "Radio Edit")
-    m = patterns.version_rx.fullmatch(t)
+    m = patterns.version_rx.search(t)
     if m:
+        print("DETECTED: VERSION")
         v = " ".join(w.capitalize() for w in m.group("type").split())
-        return Harvested(raw="", text=t, kind="", cls="remix_version", version=v)
+        return Harvested(raw="", text=t, type="version", version=v)
 
     # 5) remixer bylines (always capture version if present)
     for rx in (patterns.byline_type_by_name_rx, patterns.byline_indicator_name_rx, patterns.byline_possessive_rx):
@@ -260,7 +295,7 @@ def _classify(text: str, patterns: ClassifierPatterns) -> Harvested:
                         break
             if v:
                 v = " ".join(w.capitalize() for w in v.split())
-            return Harvested(raw="", text=t, kind="", cls="remixer_byline", name=name or None, version=v or None)
+            return Harvested(raw="", text=t, type="remix", artist=name or None, version=v or None)
 
     # 6) guarded name+type (last resort, avoid "Live Version" → byline)
     m = patterns.byline_name_type_rx.search(t)
@@ -270,45 +305,72 @@ def _classify(text: str, patterns: ClassifierPatterns) -> Harvested:
         if not (patterns.version_rx.search(candidate_name) or patterns.live_rx.search(candidate_name)):
             v = " ".join(w.capitalize() for w in m.group("type").split())
             name = _tidy_name(candidate_name)
-            return Harvested(raw="", text=t, kind="", cls="remixer_byline", name=name, version=v)
+            return Harvested(raw="", text=t, type="remix", artist=name, version=v)
 
     # Noise (scene)
+        # after live/version/byline checks
+    if patterns.noise_full_rx.fullmatch(t):
+        return Harvested(raw="", text=t, type="noise")
     if patterns.noise_rx.search(t):
-        print("DETECTED: noise")
-
-        return Harvested(raw="", text=t, kind="", cls="noise")
+        return Harvested(raw="", text=t, type="noise")
 
     # Unknown
-    return Harvested(raw="", text=t, kind="", cls="unknown")
+    return Harvested(raw="", text=t, type="unknown")
 
 # ================
 # PARSER
 # ================
-def parse_brackets(base: str) -> Tuple[str, List[Harvested]]:
+def parse_brackets_nested(base: str) -> tuple[str, list]:
     """
-    Iteratively remove bracketed segments in order of appearance.
-    Returns (cleaned_string, segments)
+    Nested-aware bracket harvesting using a progressive removal mask.
+    Innermost spans are classified first; already-harvested inner brackets
+    are *not* present when classifying an outer bracket.
     """
     patterns = compile_classifiers()
+    spans = _find_spans_nested(base, BRACKET_PAIRS)
+
+    # Process deepest -> shallowest; for identical depth, left-to-right
+    order = sorted(range(len(spans)), key=lambda i: (-spans[i].depth, spans[i].start))
+
+    # mask of what is still "visible" in the working string
+    alive = [True] * len(base)
+
     harvested: List[Harvested] = []
-    s = base
-    c = 0
-    while True:
+    for idx in order:
+        sp = spans[idx]
 
-        found = _find_first_balanced(s)
-        if not found:
-            break
-        i, j, l, r = found
-        raw = s[i:j]
-        inner = raw[1:-1].strip()
+        # Build the current inner text (children may already be removed)
+        inner_chars = [
+            base[i] for i in range(sp.start + 1, sp.end - 1)
+            if 0 <= i < len(alive) and alive[i]
+        ]
+        inner_text = re.sub(r"\s{2,}", " ", "".join(inner_chars)).strip()
 
-        h = _classify(inner, patterns)
-        h.raw = raw
-        h.kind = f"{l}{r}"
+        # If empty (or separator-only) after child removal: don't harvest, just remove
+        if _is_effectively_empty(inner_text):
+            for i in range(sp.start, sp.end):
+                if 0 <= i < len(alive):
+                    alive[i] = False
+            continue  # skip appending a Harvested
+
+        # Classify on pruned inner text
+        h = _classify(inner_text, patterns)
+
+        # Reconstruct raw *without* already removed children
+        raw_now = sp.l + (inner_text if inner_text else "") + sp.r
+
+        h.raw = raw_now
+        h.text = inner_text
+        h.span = sp
         harvested.append(h)
-        # Remove the segment and normalize any leftover double spaces
-        s = (s[:i] + " " + s[j:]).strip()
-        s = re.sub(r'\s{2,}', ' ', s)
-        c += 1
 
-    return s, harvested
+        # Now remove this span from alive view (so parents won't see it)
+        for i in range(sp.start, sp.end):
+            if 0 <= i < len(alive):
+                alive[i] = False
+
+    # Build cleaned base: everything not inside any bracket (mask still alive)
+    cleaned = "".join(ch for i, ch in enumerate(base) if alive[i])
+    cleaned = re.sub(r"\s{2,}", " ", cleaned).strip()
+
+    return cleaned, harvested
